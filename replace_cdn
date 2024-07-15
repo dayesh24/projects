@@ -1,0 +1,65 @@
+<?php
+/*
+Plugin Name: Replace with CDN
+Plugin URI: 
+Description: Replaces image URLs with CDN URLs and serves WebP format if available.
+Version: 1.0
+Author: Dayesh
+Author URI: 
+License: GPL2
+*/
+
+// Prevent direct access to the file
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class ReplaceWithCDN {
+    private $original_base_url;
+    private $cdn_base_url;
+
+    public function __construct() {
+        add_action('plugins_loaded', [$this, 'init']);
+    }
+
+    public function init() {
+        // Set original base URL and CDN base URL dynamically
+        $this->original_base_url = site_url('/');
+        $this->cdn_base_url = $this->get_cdn_base_url();
+
+        // Add filters
+        add_filter('wp_get_attachment_url', [$this, 'replace_with_cdn_url']);
+        add_filter('the_content', [$this, 'replace_content_urls']);
+    }
+
+    public function get_cdn_base_url() {
+        // Implement your logic to fetch CDN base URL dynamically
+        return get_option('my_cdn_base_url'); // Replace 'my_cdn_base_url' with your option name
+    }
+
+    public function replace_with_cdn_url($url) {
+        $original_file_path = str_replace($this->original_base_url, ABSPATH, $url);
+        $webp_file_path = preg_replace('/\.(jpg|jpeg|png)$/i', '.webp', $original_file_path);
+        $cdn_webp_url = str_replace($original_file_path, $webp_file_path, $url);
+        $cdn_webp_url = str_replace($this->original_base_url, $this->cdn_base_url, $cdn_webp_url);
+
+        if (file_exists($webp_file_path)) {
+            return $cdn_webp_url;
+        } else {
+            return str_replace($this->original_base_url, $this->cdn_base_url, $url);
+        }
+    }
+
+    public function replace_content_urls($content) {
+        return preg_replace_callback(
+            '/https?:\/\/' . preg_quote(parse_url($this->original_base_url, PHP_URL_HOST), '/') . '\/[^\s"\'<>]+\.(jpg|jpeg|png)/i',
+            function ($matches) {
+                return $this->replace_with_cdn_url($matches[0]);
+            },
+            $content
+        );
+    }
+}
+
+new ReplaceWithCDN();
+?>
